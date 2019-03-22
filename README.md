@@ -21,3 +21,4 @@ This work is reverse engineering of a source that used to be on comau [github](h
 ## Problems
 * Rotations around the cartesian axis for jogging are not named correctly. Comau has some non-standard naming of angles. Also, rotations jogging is very slow and limited.
 * Robot can be stuck in mode 3 (MOVE), the script can not handle this situation. Using an app is advised in this case. 
+* `get-key` works in blocking mode and together with "try and see" data from a robot, script can be stuck in some loop 
