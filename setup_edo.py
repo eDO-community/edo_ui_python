@@ -1,4 +1,6 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
+
+# MODIFIED TO WORK WITH 3.0.0 eDo w/o gripper
 
 import rospy
 from edo_core_msgs.msg import MachineState
@@ -14,11 +16,10 @@ from getkey import getkey, keys
 
 
 class EdoStates(object):
-    NUMBER_OF_JOINTS = 7
+    NUMBER_OF_JOINTS = 6 # The seventh joint was probably the gripper
 
     JOG_SPEED_MIN = 0.11
     JOG_SPEED_MAX = 0.99
-
     CS_DISCONNECTED = -2
     CS_UNKNOWN = -1
     CS_INIT = 0             # Initial state
@@ -27,7 +28,7 @@ class EdoStates(object):
     CS_MOVE = 3             # machine in execution of a move
     CS_JOG = 4              # machine running a jog
     CS_MACHINE_ERROR = 5    # machine in error status and waiting for a restart
-    CS_BREAKED = 6          # brake active, no motor power supply
+    CS_BRAKED = 6          # brake active, no motor power supply
     CS_INIT_DISCOVER = 254  # UI internal state if we are initializing joints
     CS_COMMAND = 255        # state machine busy keep previous state, temporary status when there is a command running
 
@@ -67,7 +68,7 @@ class EdoStates(object):
             self._edo_opcode_previous = self.edo_opcode
 
             # hack: input is blocking main while lopp ...
-            if self.edo_current_state == self.CS_BREAKED and self.edo_opcode == 64:
+            if self.edo_current_state == self.CS_BRAKED and self.edo_opcode == 64:
                 rospy.loginfo("Disengage emergency brake and press Enter to continue")
 
             if self.edo_current_state == self.CS_MACHINE_ERROR:
@@ -105,12 +106,12 @@ class EdoStates(object):
             return "JOG"
         elif self.edo_current_state == self.CS_MACHINE_ERROR:
             return "MACHINE_ERROR"
-        elif self.edo_current_state == self.CS_BREAKED:
-            return "BREAKED"
+        elif self.edo_current_state == self.CS_BRAKED:
+            return "BRAKED"
         elif self.edo_current_state == self.CS_INIT_DISCOVER:
             return "INIT_DISCOVER"
         elif self.edo_current_state == self.CS_COMMAND:
-            return "ROBOT IS BUSSY"
+            return "ROBOT IS BUSY"
 
     def send_movement_command_init(self, msg):
         self._sent_next_movement_command_bool = False
@@ -132,6 +133,9 @@ class EdoStates(object):
         msg_ji.joints_mask = (1 << self.NUMBER_OF_JOINTS) - 1  # 127
         msg_ji.reduction_factor = 0.0
         # rospy.loginfo(msg_ji)
+
+        # TODO before sending the message get number of subscribers?
+
         self._joint_init_command_pub.publish(msg_ji)  # /bridge_init
         rospy.loginfo("Message sent, 6-axis configuration was selected")
 
@@ -238,7 +242,7 @@ class EdoStates(object):
                 rospy.loginfo("Calibration NOT finished for all joints, exiting jog loop")
                 break
             else:
-                rospy.loginfo("Wrong button was presed")
+                rospy.loginfo("Wrong button was pressed")
 
     def jog(self):
 
@@ -340,10 +344,10 @@ class EdoStates(object):
         msg_mc.ovr = joint_speed
         msg_mc.delay = 255
         msg_mc.target.data_type = 74
-        msg_mc.target.joints_mask = 127
-        msg_mc.target.joints_data = [0.0] * 7
+        msg_mc.target.joints_mask = 63
+        msg_mc.target.joints_data = [0.0] * 6
 
-        # joint 7 are in degress
+        # the first six joints are in degress
         msg_mc.target.joints_data[0] = joint_values[0]
         msg_mc.target.joints_data[1] = joint_values[1]
         msg_mc.target.joints_data[2] = joint_values[2]
@@ -351,7 +355,7 @@ class EdoStates(object):
         msg_mc.target.joints_data[4] = joint_values[4]
         msg_mc.target.joints_data[5] = joint_values[5]
         # joint 7 is in milimeters
-        msg_mc.target.joints_data[6] = joint_values[6]
+        #msg_mc.target.joints_data[6] = joint_values[6]
 
         self.send_movement_command(msg_mc)
 
@@ -362,31 +366,31 @@ class EdoStates(object):
     def execute_move_joint(self):
         rospy.loginfo("Setting up a joint movement:")
         try:
-            repeat_number = int(raw_input('Write number of repetions cycles: '))
+            repeat_number = int(input('Write number of repetions cycles: '))
         except ValueError:
             rospy.loginfo("Not a number")
             rospy.loginfo("Exiting to a main loop.")
             return
 
         try:
-            number_of_points = int(raw_input('Write number of different points: '))
+            number_of_points = int(input('Write number of different points: '))
         except ValueError:
             rospy.loginfo("Not a number")
             rospy.loginfo("Exiting to a main loop.")
             return
 
         list_of_poses = []
-        rospy.loginfo("Input: j1 j2 j3 j4 j5 j6 gripper_span")
-        rospy.loginfo("Joint data in degrees and gripper span in mm")
+        rospy.loginfo("Input: j1 j2 j3 j4 j5 j6")
+        rospy.loginfo("Joint data in degrees")
 
         for i in range(0, number_of_points):
             try:
-                j1, j2, j3, j4, j5, j6, gripper_span = [int(x) for x in raw_input("Input: ").split()]
+                j1, j2, j3, j4, j5, j6 = [int(x) for x in raw_input("Input: ").split()]
             except ValueError:
-                rospy.loginfo("Not a valid angles or gripper span...")
+                rospy.loginfo("Not a valid angle...")
                 rospy.loginfo("Exiting to a main loop.")
                 return
-            list_of_poses.append([j1, j2, j3, j4, j5, j6, gripper_span])
+            list_of_poses.append([j1, j2, j3, j4, j5, j6])
 
         for item in list_of_poses:
             if len(item) != self.NUMBER_OF_JOINTS:
@@ -394,7 +398,7 @@ class EdoStates(object):
                 rospy.loginfo("Exiting to a main loop.")
                 return
         try:
-            joint_speed = int(raw_input('Write joint speed [0,..,100]: '))
+            joint_speed = int(input('Write joint speed [0,..,100]: '))
         except ValueError:
             rospy.loginfo("Not a number")
             rospy.loginfo("Exiting to a main loop.")
@@ -461,7 +465,7 @@ def main():
             states.send_first_step_bool = True
             states.select_6_axis_with_gripper_edo()
 
-        if states.edo_current_state == states.CS_BREAKED and states.edo_opcode == 72 and not states.send_second_step_bool:
+        if states.edo_current_state == states.CS_BRAKED and states.edo_opcode == 72 and not states.send_second_step_bool:
             # disengage brakes to uncalibrated robot
             states.send_second_step_bool = True
             states.disengage_brakes()
@@ -478,7 +482,7 @@ def main():
             states.send_third_step_bool = True
             states.read_input_bool = True
 
-        if states.edo_current_state == states.CS_BREAKED and states.edo_opcode == 64:
+        if states.edo_current_state == states.CS_BRAKED and states.edo_opcode == 64:
             # disengage brakes to calibrated robot on every two seconds until emergency button is released
             states.read_input_bool = False
             if not states.disengage_brakes_bool:
