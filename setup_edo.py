@@ -9,6 +9,7 @@ from edo_core_msgs.msg import JointReset
 from edo_core_msgs.msg import MovementCommand
 from edo_core_msgs.msg import JointCalibration
 from edo_core_msgs.msg import MovementFeedback
+from edo_core_msgs.msg import BrakesCheckAck
 
 # sudo -H pip3 install getkey on 16.04
 # pip install getkey on 18.04
@@ -28,9 +29,12 @@ class EdoStates(object):
     CS_MOVE = 3             # machine in execution of a move
     CS_JOG = 4              # machine running a jog
     CS_MACHINE_ERROR = 5    # machine in error status and waiting for a restart
-    CS_BRAKED = 6          # brake active, no motor power supply
+    CS_BRAKED = 6           # brake active, no motor power supply
+    BRAKES_CHECK = 7        # check state for the brakes: brakes active and motor on!
+    MOVE_TEST = 8           # move test for brakes check
     CS_INIT_DISCOVER = 254  # UI internal state if we are initializing joints
     CS_COMMAND = 255        # state machine busy keep previous state, temporary status when there is a command running
+
 
     def __init__(self, current_state, opcode):
         self.edo_current_state = current_state
@@ -232,7 +236,8 @@ class EdoStates(object):
                 # increase joint number or/and quit the calibration procedure
                 self._current_joint += 1
 
-                if self._current_joint >= self.NUMBER_OF_JOINTS-1:
+                # if self._current_joint >= self.NUMBER_OF_JOINTS-1:
+                if self._current_joint >= self.NUMBER_OF_JOINTS - 1:  # calibrate sixth joint configuration w/o gripper
                     self._current_joint = 0
                     rospy.loginfo("Calibration completed, exiting jog loop")
                     break
@@ -454,6 +459,8 @@ def main():
     states._movement_command_pub = rospy.Publisher('/bridge_move', MovementCommand, queue_size=10, latch=True)
 
     rospy.Subscriber('/machine_movement_ack', MovementFeedback, states.move_ack_callback)
+
+    rospy.Subscriber('/brakes_ckeck_ack', BrakesCheckAck, states.brakes_check_ack_callback)
 
     rate = rospy.Rate(30)  # 30hz
 
